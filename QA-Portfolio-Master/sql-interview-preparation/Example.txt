@@ -1,0 +1,309 @@
+-- =============================================================================
+-- MASTER COMPILATION DATABASE SCRIPT
+-- Workspace: sql-interview-preparation
+-- Target DBMS: PostgreSQL / Standard Relational Schema
+-- This single executable script demonstrates all 18 dimensions of relational 
+-- querying, indexing, schema setups, and transactional testing frameworks.
+-- =============================================================================
+
+-- =============================================================================
+-- 01. DDL (DATA DEFINITION LANGUAGE)
+-- Set up schema structures, clean existing objects, and isolate environments.
+-- =============================================================================
+DROP TRIGGER IF EXISTS trg_salary_audit ON employees;
+DROP FUNCTION IF EXISTS log_salary_change();
+DROP PROCEDURE IF EXISTS award_department_bonus(INT, DECIMAL);
+DROP VIEW IF EXISTS active_employee_directory;
+DROP TABLE IF EXISTS audit_log;
+DROP TABLE IF EXISTS salaries;
+DROP TABLE IF EXISTS employees;
+DROP TABLE IF EXISTS departments;
+
+CREATE TABLE departments (
+    dept_id INT PRIMARY KEY,
+    dept_name VARCHAR(100) NOT NULL UNIQUE,
+    location VARCHAR(100) NOT NULL
+);
+
+CREATE TABLE employees (
+    emp_id INT PRIMARY KEY,
+    first_name VARCHAR(50) NOT NULL,
+    last_name VARCHAR(50) NOT NULL,
+    email VARCHAR(100) UNIQUE,
+    dept_id INT REFERENCES departments(dept_id),
+    hire_date DATE NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    manager_id INT REFERENCES employees(emp_id)
+);
+
+CREATE TABLE salaries (
+    emp_id INT REFERENCES employees(emp_id) ON DELETE CASCADE,
+    salary_amount DECIMAL(12, 2) NOT NULL,
+    effective_date DATE NOT NULL,
+    PRIMARY KEY (emp_id, effective_date)
+);
+
+CREATE TABLE audit_log (
+    audit_id SERIAL PRIMARY KEY,
+    emp_id INT,
+    old_salary DECIMAL(12, 2),
+    new_salary DECIMAL(12, 2),
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =============================================================================
+-- 02. DML (DATA MANIPULATION LANGUAGE)
+-- Seed standard records to support comprehensive relational queries.
+-- =============================================================================
+INSERT INTO departments (dept_id, dept_name, location) VALUES
+(10, 'Engineering', 'San Francisco'),
+(20, 'Quality Assurance', 'Austin'),
+(30, 'Product Management', 'New York'),
+(40, 'Sales & Marketing', 'London');
+
+INSERT INTO employees (emp_id, first_name, last_name, email, dept_id, hire_date, is_active, manager_id) VALUES
+(100, 'John', 'Smith', 'john.smith@enterprise.com', 10, '2023-01-15', TRUE, NULL),
+(101, 'Alice', 'Johnson', 'alice.johnson@enterprise.com', 10, '2024-03-22', TRUE, 100),
+(102, 'Bob', 'Miller', 'bob.miller@enterprise.com', 20, '2024-05-10', TRUE, 100),
+(103, 'Sarah', 'Davis', 'sarah.davis@enterprise.com', 20, '2025-02-01', TRUE, 102),
+(104, 'Michael', 'Wilson', 'michael.wilson@enterprise.com', 30, '2023-11-05', TRUE, NULL),
+(105, 'Emily', 'Brown', 'emily.brown@enterprise.com', 10, '2025-06-14', TRUE, 100),
+(106, 'David', 'Clark', 'david.clark@enterprise.com', 40, '2024-08-19', FALSE, NULL);
+
+INSERT INTO salaries (emp_id, salary_amount, effective_date) VALUES
+(100, 150000.00, '2023-01-15'),
+(100, 160000.00, '2025-01-15'),
+(101, 110000.00, '2024-03-22'),
+(102, 95000.00, '2024-05-10'),
+(102, 105000.00, '2025-05-10'),
+(103, 85000.00, '2025-02-01'),
+(104, 135000.00, '2023-11-05'),
+(105, 90000.00, '2025-06-14'),
+(106, 75000.00, '2024-08-19');
+
+-- =============================================================================
+-- 03. DCL (DATA CONTROL LANGUAGE)
+-- Simulation parameters representing system permission locks.
+-- =============================================================================
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO qa_automation_runner;
+-- REVOKE ALTER, DROP ON ALL TABLES IN SCHEMA public FROM qa_automation_runner;
+
+-- =============================================================================
+-- 04. TCL (TRANSACTION CONTROL LANGUAGE)
+-- Execute isolated block validations with rollback checkpoints.
+-- =============================================================================
+BEGIN;
+INSERT INTO departments (dept_id, dept_name, location) VALUES (50, 'Support', 'Dallas');
+SAVEPOINT dallas_inserted;
+UPDATE departments SET location = 'Houston' WHERE dept_id = 50;
+ROLLBACK TO SAVEPOINT dallas_inserted; -- Restores location back to 'Dallas'
+COMMIT;
+
+-- =============================================================================
+-- 05. BASIC QUERIES
+-- Basic conditional filtering, sorting configurations, and string searches.
+-- =============================================================================
+-- Find active employees hired after January 1st, 2024, sorted alphabetically.
+SELECT first_name, last_name, hire_date
+FROM employees
+WHERE is_active = TRUE AND hire_date > '2024-01-01'
+ORDER BY last_name ASC, first_name ASC;
+
+-- =============================================================================
+-- 06. JOINS
+-- Extract relative values by joining primary keys and self-referencing managers.
+-- =============================================================================
+-- Extract a clean structure of employees, their departments, and their manager names.
+SELECT 
+    e.emp_id,
+    e.first_name || ' ' || e.last_name AS employee_name,
+    d.dept_name,
+    m.first_name || ' ' || m.last_name AS manager_name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+LEFT JOIN employees m ON e.manager_id = m.emp_id;
+
+-- =============================================================================
+-- 07 & 08 & 09. AGGREGATES, GROUP BY & HAVING
+-- Analytical summaries filtered after consolidation.
+-- =============================================================================
+-- Find departments where the total annual salary expense exceeds $100,000.
+SELECT 
+    d.dept_name,
+    COUNT(e.emp_id) AS total_headcount,
+    SUM(s.salary_amount) AS total_payroll_expense,
+    ROUND(AVG(s.salary_amount), 2) AS average_salary
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+INNER JOIN salaries s ON e.emp_id = s.emp_id
+-- Ensures we only use the most current salary record (latest effective_date)
+WHERE s.effective_date = (
+    SELECT MAX(sub_s.effective_date) 
+    FROM salaries sub_s 
+    WHERE sub_s.emp_id = e.emp_id
+)
+GROUP BY d.dept_name
+HAVING SUM(s.salary_amount) > 100000
+ORDER BY total_payroll_expense DESC;
+
+-- =============================================================================
+-- 10. SUBQUERIES
+-- Correlated logical filters parsing relative averages across segments.
+-- =============================================================================
+-- Retrieve employees who earn more than the average salary of their specific department.
+SELECT e.first_name, e.last_name, s.salary_amount, d.dept_name
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+INNER JOIN salaries s ON e.emp_id = s.emp_id
+WHERE s.effective_date = (SELECT MAX(sub_s.effective_date) FROM salaries sub_s WHERE sub_s.emp_id = e.emp_id)
+  AND s.salary_amount > (
+      SELECT AVG(inner_s.salary_amount)
+      FROM employees inner_e
+      INNER JOIN salaries inner_s ON inner_e.emp_id = inner_s.emp_id
+      WHERE inner_e.dept_id = e.dept_id
+        AND inner_s.effective_date = (SELECT MAX(sub_s2.effective_date) FROM salaries sub_s2 WHERE sub_s2.emp_id = inner_e.emp_id)
+  );
+
+-- =============================================================================
+-- 11. CTE (COMMON TABLE EXPRESSIONS)
+-- Modular and readable staging blocks representing complex transactional flows.
+-- =============================================================================
+WITH LatestSalaries AS (
+    SELECT emp_id, salary_amount, effective_date,
+           ROW_NUMBER() OVER(PARTITION BY emp_id ORDER BY effective_date DESC) as rn
+    FROM salaries
+),
+ActiveDepartments AS (
+    SELECT dept_id, dept_name, location 
+    FROM departments 
+    WHERE location IN ('San Francisco', 'Austin')
+)
+SELECT e.first_name, e.last_name, ad.dept_name, ls.salary_amount
+FROM employees e
+INNER JOIN ActiveDepartments ad ON e.dept_id = ad.dept_id
+INNER JOIN LatestSalaries ls ON e.emp_id = ls.emp_id
+WHERE ls.rn = 1;
+
+-- =============================================================================
+-- 12. WINDOW FUNCTIONS
+-- Advanced row sequences, rank metrics, and value offsets.
+-- =============================================================================
+-- Rank employees in each department by salary without leaving ranking gaps.
+SELECT 
+    d.dept_name,
+    e.first_name || ' ' || e.last_name AS employee_name,
+    s.salary_amount,
+    DENSE_RANK() OVER(PARTITION BY e.dept_id ORDER BY s.salary_amount DESC) AS salary_rank_in_dept,
+    ROW_NUMBER() OVER(PARTITION BY e.dept_id ORDER BY e.hire_date ASC) AS seniority_sequence
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+INNER JOIN salaries s ON e.emp_id = s.emp_id
+WHERE s.effective_date = (SELECT MAX(sub_s.effective_date) FROM salaries sub_s WHERE sub_s.emp_id = e.emp_id);
+
+-- =============================================================================
+-- 13. VIEWS
+-- Read-only abstractions masking schema complexity and protecting integrity.
+-- =============================================================================
+CREATE VIEW active_employee_directory AS
+SELECT 
+    e.emp_id,
+    e.first_name,
+    e.last_name,
+    d.dept_name,
+    e.email
+FROM employees e
+INNER JOIN departments d ON e.dept_id = d.dept_id
+WHERE e.is_active = TRUE;
+
+-- Verify View Output
+SELECT * FROM active_employee_directory;
+
+-- =============================================================================
+-- 14. INDEXES
+-- Optimize lookup trees and secure low latency verification loops.
+-- =============================================================================
+CREATE INDEX idx_employees_dept ON employees(dept_id);
+CREATE INDEX idx_salaries_lookup ON salaries(emp_id, effective_date DESC);
+
+-- =============================================================================
+-- 15. STORED PROCEDURES
+-- Dynamic transaction blocks executing logic sequences inside the database server.
+-- =============================================================================
+CREATE OR REPLACE PROCEDURE award_department_bonus(
+    p_dept_id INT,
+    p_bonus_percentage DECIMAL
+)
+LANGUAGE plpgsql AS $$
+BEGIN
+    INSERT INTO salaries (emp_id, salary_amount, effective_date)
+    SELECT 
+        e.emp_id,
+        s.salary_amount * (1 + (p_bonus_percentage / 100)),
+        CURRENT_DATE
+    FROM employees e
+    INNER JOIN salaries s ON e.emp_id = s.emp_id
+    WHERE e.dept_id = p_dept_id
+      AND s.effective_date = (SELECT MAX(sub_s.effective_date) FROM salaries sub_s WHERE sub_s.emp_id = e.emp_id);
+      
+    COMMIT;
+END;
+$$;
+
+-- Call the procedure
+CALL award_department_bonus(20, 5.00); -- Gives QA department a 5% raise
+
+-- =============================================================================
+-- 16. TRIGGERS
+-- Capture changes in real-time, enforcing security audits and historical checks.
+-- =============================================================================
+CREATE OR REPLACE FUNCTION log_salary_change()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF OLD.salary_amount <> NEW.salary_amount THEN
+        INSERT INTO audit_log (emp_id, old_salary, new_salary)
+        VALUES (NEW.emp_id, OLD.salary_amount, NEW.salary_amount);
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_salary_audit
+    BEFORE UPDATE ON salaries
+    FOR EACH ROW
+    EXECUTE FUNCTION log_salary_change();
+
+-- Trigger Execution Simulation
+UPDATE salaries 
+SET salary_amount = 165000.00 
+WHERE emp_id = 100 AND effective_date = '2025-01-15';
+
+-- Verify the Trigger logged the audit transaction
+SELECT * FROM audit_log;
+
+-- =============================================================================
+-- 17 & 18. PRACTICE QUESTIONS AND INTERVIEW SOLUTIONS
+-- Comprehensive scenarios evaluating senior relational engineering knowledge.
+-- =============================================================================
+
+-- CHALLENGE 1: Find the 2nd highest salary across the entire company.
+-- Solution using Offset/Limit:
+SELECT DISTINCT salary_amount
+FROM salaries
+WHERE effective_date = (SELECT MAX(sub_s.effective_date) FROM salaries sub_s WHERE sub_s.emp_id = salaries.emp_id)
+ORDER BY salary_amount DESC
+LIMIT 1 OFFSET 1;
+
+-- CHALLENGE 2: Identify any orphaned departments that contain 0 assigned employees.
+SELECT d.dept_id, d.dept_name
+FROM departments d
+LEFT JOIN employees e ON d.dept_id = e.dept_id
+WHERE e.emp_id IS NULL;
+
+-- CHALLENGE 3: Calculate the monthly hiring velocity (cumulative count of employees hired over time).
+SELECT 
+    TO_CHAR(hire_date, 'YYYY-MM') AS hire_month,
+    COUNT(emp_id) AS hires_in_month,
+    SUM(COUNT(emp_id)) OVER(ORDER BY TO_CHAR(hire_date, 'YYYY-MM') ASC) AS cumulative_headcount_velocity
+FROM employees
+GROUP BY TO_CHAR(hire_date, 'YYYY-MM')
+ORDER BY hire_month ASC;

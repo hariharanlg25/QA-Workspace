@@ -1,0 +1,89 @@
+# =========================
+# Java
+# =========================
+*.class
+*.jar
+*.war
+*.ear
+
+# =========================
+# Maven
+# =========================
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+
+# =========================
+# Eclipse
+# =========================
+.project
+.classpath
+.settings/
+.metadata/
+
+# =========================
+# IntelliJ
+# =========================
+.idea/
+*.iml
+
+# =========================
+# VS Code
+# =========================
+.vscode/
+
+# =========================
+# Logs
+# =========================
+*.log
+logs/
+
+# =========================
+# OS Files
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Test Reports
+# =========================
+allure-results/
+allure-report/
+test-output/
+surefire-reports/
+reports/
+
+# =========================
+# Screenshots
+# =========================
+screenshots/
+
+# =========================
+# Temporary Files
+# =========================
+*.tmp
+*.temp
+*.bak
+
+# =========================
+# Node (if applicable)
+# =========================
+node_modules/
+
+# =========================
+# Environment Files
+# =========================
+.env
+.env.*
+
+# =========================
+# Generated Files
+# =========================
+bin/
+out/
+build/

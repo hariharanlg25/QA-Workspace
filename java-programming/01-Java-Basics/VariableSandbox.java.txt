@@ -1,0 +1,81 @@
+package java_programming.basics;
+
+import java.util.logging.Logger;
+import java.util.logging.Level;
+
+/**
+ * Technical Sandbox to demonstrate Variable Scopes, Memory allocations, 
+ * Primitive data type behaviors, and safe explicit/implicit casting rules.
+ */
+public class VariableSandbox {
+
+    // 1. Class Variable (Static Field) - Allocated in Metaspace/Static memory area
+    // Shared across all instances of this class.
+    private static final Logger logger = Logger.getLogger(VariableSandbox.class.getName());
+    private static int globalExecutionCount = 0;
+
+    // 2. Instance Variable (Non-static Field) - Allocated on the Heap when object is created
+    private final String environmentName;
+
+    /**
+     * Constructor initializing the instance state.
+     * @param env Name of target environment (e.g., "STAGING", "PROD")
+     */
+    public VariableSandbox(String env) {
+        this.environmentName = env;
+        globalExecutionCount++;
+    }
+
+    /**
+     * Executes data type validations and demonstrates type casting.
+     * @param inputFactor Local processing multiplier passed via stack frame
+     */
+    public void executeTypeVerification(int inputFactor) {
+        // 3. Local Variable - Allocated on the Stack frame. Extinguishes when method exits.
+        // Must be explicitly initialized before use.
+        int baselineScore = 5000;
+        
+        logger.log(Level.INFO, "Executing verification in context: {0}", this.environmentName);
+        logger.log(Level.INFO, "Current Total System Executions: {0}", globalExecutionCount);
+
+        // --- IMPLICIT CASTING (Widening Conversion) ---
+        // Automatically handled by JVM: int (32-bit) -> long (64-bit) -> float (32-bit IEEE 754)
+        int initialDataValue = baselineScore * inputFactor;
+        long widenedValue = initialDataValue; 
+        double highlyPreciseValue = widenedValue;
+
+        logger.log(Level.INFO, "Implicit Casting (Widening) Result: int to double -> {0}", highlyPreciseValue);
+
+        // --- EXPLICIT CASTING (Narrowing Conversion) ---
+        // Manual conversion required because data truncation or overflow risks exist: double -> int
+        double analyticalWeight = 9876.54321;
+        int narrowedData = (int) analyticalWeight; // Fractional part completely dropped
+
+        logger.log(Level.INFO, "Explicit Casting (Narrowing) Result: double {0} to int -> {1}", 
+                new Object[]{analyticalWeight, narrowedData});
+
+        // --- BIT OVERFLOW DEMONSTRATION ---
+        // Exceeding primitive boundaries forces a wrap-around (Two's Complement arithmetic)
+        byte overflowTarget = 127; // Max positive value for signed 8-bit byte
+        overflowTarget++;          // Structural overflow
+        
+        logger.log(Level.WARNING, "Simulated Byte Buffer Overflow. Expected 128, Actual wrapped value: {0}", 
+                overflowTarget);
+    }
+
+    /**
+     * Primary application execution entry point.
+     */
+    public static void main(String[] args) {
+        try {
+            logger.info("Initializing Automation Variable Sandbox Lifecycle...");
+            
+            VariableSandbox sandbox = new VariableSandbox("STAGING_ENVIRONMENT");
+            sandbox.executeTypeVerification(5);
+            
+            logger.info("Sandbox Lifecycle completed with zero runtime faults.");
+        } catch (Exception e) {
+            logger.log(Level.SEVERE, "Unexpected anomaly intercepted during sandbox runtime: ", e);
+        }
+    }
+}
